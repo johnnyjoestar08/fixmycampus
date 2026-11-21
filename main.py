@@ -116,10 +116,19 @@ def decode_access_token(token: str) -> dict | None:
 
 
 # ---------------- DATABASE ----------------
-
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'fixmycampus.db'}")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+is_sqlite = DATABASE_URL.startswith("sqlite")
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if is_sqlite else {},
+    pool_pre_ping=True,
+)
+# DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'fixmycampus.db'}")
+
+# engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 
 
@@ -202,11 +211,11 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
 def upgrade_db_schema():
-    """Create missing tables and add columns that older databases don't have yet."""
+    """Create missing tables and add columns that older SQLite databases don't have yet."""
     Base.metadata.create_all(bind=engine)
+    if not is_sqlite:
+        return
     with engine.begin() as conn:
         columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(issues)").fetchall()]
         if "user_id" not in columns:
@@ -214,13 +223,27 @@ def upgrade_db_schema():
         if "assigned_to_id" not in columns:
             conn.exec_driver_sql("ALTER TABLE issues ADD COLUMN assigned_to_id INTEGER DEFAULT NULL")
         if "assigned_staff_name" not in columns:
-            conn.exec_driver_sql(
-                "ALTER TABLE issues ADD COLUMN assigned_staff_name VARCHAR(100) DEFAULT NULL"
-            )
+            conn.exec_driver_sql("ALTER TABLE issues ADD COLUMN assigned_staff_name VARCHAR(100) DEFAULT NULL")
         if "resolution_notes" not in columns:
-            conn.exec_driver_sql(
-                "ALTER TABLE issues ADD COLUMN resolution_notes VARCHAR(500) DEFAULT NULL"
-            )
+            conn.exec_driver_sql("ALTER TABLE issues ADD COLUMN resolution_notes VARCHAR(500) DEFAULT NULL")
+
+# def upgrade_db_schema():
+#     """Create missing tables and add columns that older databases don't have yet."""
+#     Base.metadata.create_all(bind=engine)
+#     with engine.begin() as conn:
+#         columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(issues)").fetchall()]
+#         if "user_id" not in columns:
+#             conn.exec_driver_sql("ALTER TABLE issues ADD COLUMN user_id INTEGER DEFAULT NULL")
+#         if "assigned_to_id" not in columns:
+#             conn.exec_driver_sql("ALTER TABLE issues ADD COLUMN assigned_to_id INTEGER DEFAULT NULL")
+#         if "assigned_staff_name" not in columns:
+#             conn.exec_driver_sql(
+#                 "ALTER TABLE issues ADD COLUMN assigned_staff_name VARCHAR(100) DEFAULT NULL"
+#             )
+#         if "resolution_notes" not in columns:
+#             conn.exec_driver_sql(
+#                 "ALTER TABLE issues ADD COLUMN resolution_notes VARCHAR(500) DEFAULT NULL"
+#             )
 
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@fixmycampus.edu").strip().lower()
