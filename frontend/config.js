@@ -7,7 +7,7 @@
 ========================================= */
 
 const FMC = (() => {
-  const API_BASE = window.FMC_API_BASE || "http://127.0.0.1:8001/api";
+  const API_BASE = window.FMC_API_BASE || "https://fixmycampus-backend-lz7r.onrender.com/api";
   const STORAGE_KEY = "fmc_auth";
 
   function getAuth() {
